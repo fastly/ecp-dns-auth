@@ -64,13 +64,14 @@ name = "ecp-dns-auth"
 version = "0.1.0"
 dependencies = [
  "fastly",
+ "serde_json",
 ]
 
 [[package]]
 name = "fastly"
-version = "0.8.0"
+version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b1d6d1476a85603b9fd5162f747570686f4637383d9f8798d5ef0f2e628193b"
+checksum = "ac81708c039cd2f95e09f3b700d36b46976de382dd47cf46e3f18a51aa70427d"
 dependencies = [
  "anyhow",
  "bytes 0.5.6",
@@ -91,9 +92,9 @@ dependencies = [
 
 [[package]]
 name = "fastly-macros"
-version = "0.8.0"
+version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b495f156e4403917917522866ef0761164196c4e36369cc009c1e96d6d90012"
+checksum = "99060e78d03bd1436bd4055c54cc5c62b1926e9c894b9bf00c40e8e5c276fd99"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -102,9 +103,9 @@ dependencies = [
 
 [[package]]
 name = "fastly-shared"
-version = "0.8.0"
+version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "010266f409d00e3d4cf2e0f3e201265960b96fa342bbddf366a41beea5d10346"
+checksum = "238fb7af2219391cb024673302861adffd96cb3dbe4b602c2c7abef11ce5a5f9"
 dependencies = [
  "bitflags",
  "http",
@@ -113,10 +114,11 @@ dependencies = [
 
 [[package]]
 name = "fastly-sys"
-version = "0.8.0"
+version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fd84c88b732ac6d5711363856a3d4b686fd2691ba753d565879779c6ba8d84b"
+checksum = "fa50606a08d3ee623033013d063e1843c5cb8c928fce3bd0f2c8ce4eaa460d8d"
 dependencies = [
+ "bitflags",
  "fastly-shared",
 ]
 
@@ -154,7 +156,7 @@ checksum = "527e8c9ac747e28542699a951517aa9a6945af506cd1f2e1b53a576c17b6cc11"
 dependencies = [
  "bytes 1.0.1",
  "fnv",
- "itoa",
+ "itoa 0.4.7",
 ]
 
 [[package]]
@@ -173,6 +175,12 @@ name = "itoa"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd25036021b0de88a0aff6b850051563c6516d0bf53f8638938edbb9de732736"
+
+[[package]]
+name = "itoa"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c8af84674fe1f223a982c933a0ee1086ac4d4052aa0fb8060c12c6ad838e754"
 
 [[package]]
 name = "lazy_static"
@@ -256,11 +264,11 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.64"
+version = "1.0.85"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "799e97dc9fdae36a5c8b8f2cae9ce2ee9fdce2058c57a93e6099d919fd982f79"
+checksum = "e55a28e3aaef9d5ce0506d0a14dbba8054ddc7e499ef522dd8b26859ec9d4a44"
 dependencies = [
- "itoa",
+ "itoa 1.0.3",
  "ryu",
  "serde",
 ]
@@ -272,7 +280,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edfa57a7f8d9c1d260a549e7224100f6c43d43f9103e06dd8b4095a9b2b43ce9"
 dependencies = [
  "form_urlencoded",
- "itoa",
+ "itoa 0.4.7",
  "ryu",
  "serde",
 ]
