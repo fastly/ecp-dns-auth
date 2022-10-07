@@ -1,7 +1,13 @@
-use fastly::error::anyhow;
+use std::net::IpAddr;
+use std::str::FromStr;
+
+use fastly::handle::client_ip_addr;
 use fastly::http::{header, Method, StatusCode};
 use fastly::{Error, Request, Response};
 use serde_json::json;
+use trust_dns_proto::error::ProtoError;
+use trust_dns_proto::op::{Header, Message, ResponseCode};
+use trust_dns_proto::rr::{Name, RData, Record};
 
 fn debug_json() -> String {
     json!({
@@ -26,28 +32,85 @@ fn query_from_qstring(req: Request) -> Option<Vec<u8>> {
 fn handle_doh_get(req: Request) -> Result<Response, Error> {
     let query = match query_from_qstring(req) {
         Some(query) => query,
-        _ => return Err(anyhow!("bad query string")),
+        _ => {
+            return Ok(Response::from_status(StatusCode::BAD_REQUEST)
+                .with_body_text_plain("Missing or invalid query string\n"))
+        }
     };
-
-    handle_doh_query(query)
+    handle_doh_request(query)
 }
 
 fn handle_doh_post(req: Request) -> Result<Response, Error> {
-    handle_doh_query(req.into_body_bytes())
+    handle_doh_request(req.into_body_bytes())
 }
 
-fn handle_doh_query(query: Vec<u8>) -> Result<Response, Error> {
-    println!("query: {:X?}", query);
-    // return Ok(Response::from_status(StatusCode::OK).with_body_text_plain("DoH query response\n"));
-    return Ok(Response::from_status(StatusCode::OK)
-        .with_body_octet_stream(&[
-            0x00, 0x00, 0x81, 0x80, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x03, 0x77,
-            0x77, 0x77, 0x07, 0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x03, 0x63, 0x6F, 0x6D,
-            0x00, 0x00, 0x1C, 0x00, 0x01, 0xC0, 0x0C, 0x00, 0x1C, 0x00, 0x01, 0x00, 0x00, 0x0E,
-            0x7D, 0x00, 0x10, 0x20, 0x01, 0x0D, 0xB8, 0xAB, 0xCD, 0x00, 0x12, 0x00, 0x01, 0x00,
-            0x02, 0x00, 0x03, 0x00, 0x04,
-        ])
-        .with_header(header::CONTENT_TYPE, "application/dns-message"));
+fn handle_doh_request(raw_msg: Vec<u8>) -> Result<Response, Error> {
+    match handle_request(raw_msg) {
+        Ok(response) => Ok(Response::from_status(StatusCode::OK)
+            .with_body_octet_stream(&response)
+            .with_header(header::CONTENT_TYPE, "application/dns-message")),
+        _ => Ok(Response::from_status(StatusCode::BAD_REQUEST)
+            .with_body_text_plain("Unable to parse DNS query\n")),
+    }
+}
+
+fn handle_request(raw_msg: Vec<u8>) -> Result<Vec<u8>, ProtoError> {
+    println!("raw_msg: {:X?}", raw_msg);
+
+    let mut request = Message::from_vec(&raw_msg)?;
+    println!("request: {:?}", request);
+
+    // at this point we have a well-formed DNS query so even in the
+    // case of other errors we will be returning a DNS response.
+
+    let queries = request.take_queries();
+    let query = match queries.first() {
+        Some(query) if queries.len() == 1 => query,
+        _ => {
+            return Message::error_msg(request.id(), request.op_code(), ResponseCode::FormErr)
+                .to_vec()
+        }
+    };
+
+    println!("query: {:?}", query);
+
+    let mut response_header = Header::response_from_request(request.header());
+    response_header.set_authoritative(true);
+    response_header.set_answer_count(1);
+    let mut response = Message::new();
+    response.set_header(response_header);
+
+    match client_ip_addr().unwrap() {
+        IpAddr::V4(ipv4) => {
+            response.add_answer(Record::from_rdata(
+                Name::from_str("www.example.com").unwrap(),
+                5,
+                RData::A(ipv4),
+            ));
+        }
+        IpAddr::V6(ipv6) => {
+            response.add_answer(Record::from_rdata(
+                Name::from_str("www.example.com").unwrap(),
+                5,
+                RData::AAAA(ipv6),
+            ));
+        }
+    }
+    response.add_queries(queries);
+
+    println!("response: {:?}", response);
+
+    return response.to_vec();
+
+    /*
+        return Ok(vec![
+            0x00, 0x00, 0x81, 0x80, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x03, 0x77, 0x77,
+            0x77, 0x07, 0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x03, 0x63, 0x6F, 0x6D, 0x00, 0x00,
+            0x1C, 0x00, 0x01, 0xC0, 0x0C, 0x00, 0x1C, 0x00, 0x01, 0x00, 0x00, 0x0E, 0x7D, 0x00, 0x10,
+            0x20, 0x01, 0x0D, 0xB8, 0xAB, 0xCD, 0x00, 0x12, 0x00, 0x01, 0x00, 0x02, 0x00, 0x03, 0x00,
+            0x04,
+        ]);
+    */
 }
 
 #[fastly::main]
