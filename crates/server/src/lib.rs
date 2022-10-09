@@ -48,20 +48,20 @@
 
 pub use trust_dns_client as client;
 pub use trust_dns_proto as proto;
-#[cfg(feature = "trust-dns-recursor")]
-#[cfg_attr(docsrs, doc(cfg(feature = "recursor")))]
-pub use trust_dns_recursor as recursor;
-#[cfg(feature = "trust-dns-resolver")]
-#[cfg_attr(docsrs, doc(cfg(feature = "resolver")))]
-pub use trust_dns_resolver as resolver;
+////#[cfg(feature = "trust-dns-recursor")]
+////#[cfg_attr(docsrs, doc(cfg(feature = "recursor")))]
+////pub use trust_dns_recursor as recursor;
+////#[cfg(feature = "trust-dns-resolver")]
+////#[cfg_attr(docsrs, doc(cfg(feature = "resolver")))]
+////pub use trust_dns_resolver as resolver;
 
 pub mod authority;
-pub mod config;
-pub mod error;
+////pub mod config;
+////pub mod error;
 pub mod server;
-pub mod store;
+////pub mod store;
 
-pub use self::server::ServerFuture;
+////pub use self::server::ServerFuture;
 
 /// Returns the current version of Trust-DNS
 pub fn version() -> &'static str {

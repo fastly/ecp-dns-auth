@@ -113,6 +113,7 @@ impl<'a> RequestInfo<'a> {
 pub struct ResponseInfo(Header);
 
 impl ResponseInfo {
+    #![allow(dead_code)]
     pub(crate) fn serve_failed() -> Self {
         let mut header = Header::new();
         header.set_response_code(ResponseCode::ServFail);

@@ -7,32 +7,32 @@
 
 //! Module for `Catalog` of `Authority` zones which are responsible for storing `RRSet` records.
 
-use crate::client::op::ResponseCode;
+////use crate::client::op::ResponseCode;
 
-/// Result of an Update operation
-pub type UpdateResult<T> = Result<T, ResponseCode>;
+//// Result of an Update operation
+////pub type UpdateResult<T> = Result<T, ResponseCode>;
 
-mod auth_lookup;
-#[allow(clippy::module_inception)]
-mod authority;
-pub(crate) mod authority_object;
-mod catalog;
-mod error;
+////mod auth_lookup;
+////#[allow(clippy::module_inception)]
+////mod authority;
+////pub(crate) mod authority_object;
+////mod catalog;
+////mod error;
 pub(crate) mod message_request;
 mod message_response;
-mod zone_type;
+////mod zone_type;
 
-pub use self::auth_lookup::{
-    AnyRecords, AuthLookup, AuthLookupIter, LookupRecords, LookupRecordsIter,
-};
-pub use self::authority::{Authority, LookupOptions};
-pub use self::authority_object::{AuthorityObject, EmptyLookup, LookupObject};
-pub use self::catalog::Catalog;
-pub use self::error::{LookupError, LookupResult};
+////pub use self::auth_lookup::{
+////    AnyRecords, AuthLookup, AuthLookupIter, LookupRecords, LookupRecordsIter,
+////};
+////pub use self::authority::{Authority, LookupOptions};
+////pub use self::authority_object::{AuthorityObject, EmptyLookup, LookupObject};
+////pub use self::catalog::Catalog;
+////pub use self::error::{LookupError, LookupResult};
 pub use self::message_request::{MessageRequest, Queries, UpdateRequest};
 pub use self::message_response::{MessageResponse, MessageResponseBuilder};
-pub use self::zone_type::ZoneType;
+////pub use self::zone_type::ZoneType;
 
-#[cfg(feature = "dnssec")]
-#[cfg_attr(docsrs, doc(cfg(feature = "dnssec")))]
-pub use self::authority::DnssecAuthority;
+////#[cfg(feature = "dnssec")]
+////#[cfg_attr(docsrs, doc(cfg(feature = "dnssec")))]
+////pub use self::authority::DnssecAuthority;

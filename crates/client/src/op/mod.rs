@@ -9,10 +9,10 @@
 //! be used together to either query or update resource records sets.
 
 mod lower_query;
-pub mod update_message;
+////pub mod update_message;
 
 pub use self::lower_query::LowerQuery;
-pub use self::update_message::UpdateMessage;
+////pub use self::update_message::UpdateMessage;
 pub use crate::proto::{
     op::{
         Edns, Header, Message, MessageFinalizer, MessageType, MessageVerifier, OpCode, Query,

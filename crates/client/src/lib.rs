@@ -268,29 +268,29 @@
 //! }
 //! ```
 
-pub mod client;
+////pub mod client;
 pub mod error;
-#[cfg(feature = "mdns")]
-#[cfg_attr(docsrs, doc(cfg(feature = "mdns")))]
-pub mod multicast;
+////#[cfg(feature = "mdns")]
+////#[cfg_attr(docsrs, doc(cfg(feature = "mdns")))]
+////pub mod multicast;
 pub mod op;
 pub mod rr;
 pub mod serialize;
-pub mod tcp;
-pub mod udp;
+////pub mod tcp;
+////pub mod udp;
 
 // TODO: consider removing tcp/udp/https modules...
-#[cfg(feature = "dns-over-https")]
-mod https_client_connection;
+////#[cfg(feature = "dns-over-https")]
+////mod https_client_connection;
 
 pub use trust_dns_proto as proto;
 
 /// The https module which contains all https related connection types
-#[cfg(feature = "dns-over-https")]
-#[cfg_attr(docsrs, doc(cfg(feature = "dns-over-https")))]
-pub mod https {
-    pub use super::https_client_connection::HttpsClientConnection;
-}
+////#[cfg(feature = "dns-over-https")]
+////#[cfg_attr(docsrs, doc(cfg(feature = "dns-over-https")))]
+////pub mod https {
+////    pub use super::https_client_connection::HttpsClientConnection;
+////}
 
 /// Returns a version as specified in Cargo.toml
 pub fn version() -> &'static str {

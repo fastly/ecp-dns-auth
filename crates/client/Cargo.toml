@@ -41,28 +41,28 @@ codecov = { repository = "bluejekyll/trust-dns", branch = "main", service = "git
 maintenance = { status = "actively-developed" }
 
 [features]
-backtrace = ["trust-dns-proto/backtrace"]
+#backtrace = ["trust-dns-proto/backtrace"]
 # TODO: the rustls and openssl crates are not deps... should we change that to make them easier to use?
 #  or change this to also be external?
-dns-over-https-openssl = ["dns-over-https", "dns-over-openssl"]
-dns-over-https-rustls = ["dns-over-https", "dns-over-rustls", "trust-dns-proto/dns-over-https-rustls"]
-dns-over-https = ["trust-dns-proto/dns-over-https"]
+#dns-over-https-openssl = ["dns-over-https", "dns-over-openssl"]
+#dns-over-https-rustls = ["dns-over-https", "dns-over-rustls", "trust-dns-proto/dns-over-https-rustls"]
+#dns-over-https = ["trust-dns-proto/dns-over-https"]
 
-dns-over-quic = ["dns-over-rustls", "trust-dns-proto/dns-over-quic"]
+#dns-over-quic = ["dns-over-rustls", "trust-dns-proto/dns-over-quic"]
 
-dns-over-native-tls = ["dns-over-tls", "trust-dns-proto/dns-over-native-tls"]
-dns-over-openssl = ["dns-over-tls", "dnssec-openssl", "openssl"]
-dns-over-rustls = ["dns-over-tls", "dnssec-ring", "rustls", "webpki", "trust-dns-proto/dns-over-rustls"]
-dns-over-tls = []
+#dns-over-native-tls = ["dns-over-tls", "trust-dns-proto/dns-over-native-tls"]
+#dns-over-openssl = ["dns-over-tls", "dnssec-openssl", "openssl"]
+#dns-over-rustls = ["dns-over-tls", "dnssec-ring", "rustls", "webpki", "trust-dns-proto/dns-over-rustls"]
+#dns-over-tls = []
 
-dnssec-openssl = ["dnssec", "openssl", "trust-dns-proto/dnssec-openssl"]
-dnssec-ring = ["dnssec", "ring", "trust-dns-proto/dnssec-ring"]
-dnssec = ["trust-dns-proto/dnssec"]
+#dnssec-openssl = ["dnssec", "openssl", "trust-dns-proto/dnssec-openssl"]
+#dnssec-ring = ["dnssec", "ring", "trust-dns-proto/dnssec-ring"]
+#dnssec = ["trust-dns-proto/dnssec"]
 
-serde-config = ["serde"]
+#serde-config = ["serde"]
 
 # enables experimental the mDNS (multicast) feature
-mdns = ["trust-dns-proto/mdns"]
+#mdns = ["trust-dns-proto/mdns"]
 
 [lib]
 name = "trust_dns_client"
@@ -72,26 +72,26 @@ path = "src/lib.rs"
 cfg-if = "1"
 data-encoding = "2.2.0"
 futures-channel = { version = "0.3.5", default-features = false, features = ["std"] }
-futures-util = { version = "0.3.5", default-features = false, features = ["std"] }
+#futures-util = { version = "0.3.5", default-features = false, features = ["std"] }
 lazy_static = "1.2.0"
-openssl = { version = "0.10", features = ["v102", "v110"], optional = true }
+#openssl = { version = "0.10", features = ["v102", "v110"], optional = true }
 radix_trie = "0.2.0"
 rand = "0.8"
-ring = { version = "0.16", optional = true, features = ["std"]}
-rustls = { version = "0.20.0", optional = true }
+#ring = { version = "0.16", optional = true, features = ["std"]}
+#rustls = { version = "0.20.0", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 thiserror = "1.0.20"
 time = "0.3"
 tracing = "0.1.30"
-tokio = { version = "1.0", features = ["rt"] }
+#tokio = { version = "1.0", features = ["rt"] }
 trust-dns-proto = { version = "0.22.0", path = "../proto"}
-webpki = { version = "0.22.0", optional = true }
+#webpki = { version = "0.22.0", optional = true }
 
 [dev-dependencies]
-futures = { version = "0.3.5", default-features = false, features = ["std", "executor"] }
-openssl = { version = "0.10", features = ["v102", "v110"], optional = false }
-tokio = { version = "1.0", features = ["rt", "macros"] }
-tracing-subscriber = { version = "0.3", features = ["std", "fmt", "env-filter"] }
+#futures = { version = "0.3.5", default-features = false, features = ["std", "executor"] }
+#openssl = { version = "0.10", features = ["v102", "v110"], optional = false }
+#tokio = { version = "1.0", features = ["rt", "macros"] }
+#tracing-subscriber = { version = "0.3", features = ["std", "fmt", "env-filter"] }
 
 [package.metadata.docs.rs]
 all-features = true
