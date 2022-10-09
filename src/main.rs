@@ -1,13 +1,16 @@
-use std::net::IpAddr;
-use std::str::FromStr;
+use std::net::{IpAddr, Ipv4Addr};
+use std::{io, str::FromStr};
 
 use fastly::handle::client_ip_addr;
 use fastly::http::{header, Method, StatusCode};
 use fastly::{Error, Request, Response};
 use serde_json::json;
+
 use trust_dns_proto::error::ProtoError;
 use trust_dns_proto::op::{Header, Message, ResponseCode};
 use trust_dns_proto::rr::{Name, RData, Record};
+use trust_dns_proto::serialize::binary::{BinDecodable, BinDecoder, BinEncoder};
+use trust_dns_server::authority::{MessageRequest, MessageResponseBuilder};
 
 fn debug_json() -> String {
     json!({
@@ -57,6 +60,79 @@ fn handle_doh_request(raw_msg: Vec<u8>) -> Result<Response, Error> {
 fn handle_request(raw_msg: Vec<u8>) -> Result<Vec<u8>, ProtoError> {
     println!("raw_msg: {:X?}", raw_msg);
 
+    let mut decoder = BinDecoder::new(&raw_msg);
+    let msg_req = MessageRequest::read(&mut decoder)?;
+    println!("MessageRequest {:?}", msg_req);
+
+    // at this point we have a well-formed DNS query so even in the
+    // case of other errors we will be returning a DNS response.
+    let header = msg_req.header();
+    let query = msg_req.query();
+    println!("header: {:?}", header);
+    println!("query: {:?}", query);
+
+    // TODO actually look up the query
+    let answer = match client_ip_addr().unwrap() {
+        IpAddr::V4(ipv4) => Record::from_rdata(
+            Name::from_str("www.example.com").unwrap(),
+            5,
+            RData::A(ipv4),
+        ),
+        IpAddr::V6(ipv6) => Record::from_rdata(
+            Name::from_str("www.example.com").unwrap(),
+            5,
+            RData::AAAA(ipv6),
+        ),
+    };
+
+    let answer2 = Record::from_rdata(
+        Name::from_str("www.example.com").unwrap(),
+        5,
+        RData::A(Ipv4Addr::new(1, 2, 3, 4)),
+    );
+
+    let answer3 = Record::from_rdata(
+        Name::from_str("www.example.com").unwrap(),
+        5,
+        RData::A(Ipv4Addr::new(5, 6, 7, 8)),
+    );
+
+    let answers = [&answer, &answer2, &answer3];
+    let ns = None.into_iter();
+    let soa = None.into_iter();
+    let additionals = None.into_iter();
+
+    // build response
+    let mut response_header = Header::response_from_request(header);
+    response_header.set_authoritative(true);
+    let msg_resp = MessageResponseBuilder::from_message_request(&msg_req).build(
+        response_header,
+        answers,
+        ns,
+        soa,
+        additionals,
+    );
+    println!("msg_resp: {:?}", msg_resp);
+
+    let mut buffer = Vec::with_capacity(512);
+    let encode_result = {
+        let mut encoder = BinEncoder::new(&mut buffer);
+        msg_resp.destructive_emit(&mut encoder)
+    };
+
+    encode_result.map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("error encoding message: {}", e),
+        )
+    })?;
+
+    return Ok(buffer);
+}
+
+fn handle_request_orig(raw_msg: Vec<u8>) -> Result<Vec<u8>, ProtoError> {
+    println!("raw_msg: {:X?}", raw_msg);
+
     let mut request = Message::from_vec(&raw_msg)?;
     println!("request: {:?}", request);
 
@@ -76,7 +152,7 @@ fn handle_request(raw_msg: Vec<u8>) -> Result<Vec<u8>, ProtoError> {
 
     let mut response_header = Header::response_from_request(request.header());
     response_header.set_authoritative(true);
-    response_header.set_answer_count(1);
+    // response_header.set_answer_count(1);
     let mut response = Message::new();
     response.set_header(response_header);
 
@@ -96,6 +172,28 @@ fn handle_request(raw_msg: Vec<u8>) -> Result<Vec<u8>, ProtoError> {
             ));
         }
     }
+
+    let answer2 = Record::from_rdata(
+        Name::from_str("www.example.com").unwrap(),
+        5,
+        RData::A(Ipv4Addr::new(1, 2, 3, 4)),
+    );
+
+    let answer3 = Record::from_rdata(
+        Name::from_str("www.example.com").unwrap(),
+        5,
+        RData::A(Ipv4Addr::new(5, 6, 7, 8)),
+    );
+    let answer4 = Record::from_rdata(
+        Name::from_str("www.example.com").unwrap(),
+        5,
+        RData::A(Ipv4Addr::new(5, 6, 7, 8)),
+    );
+
+    response.add_answer(answer2);
+    response.add_answer(answer3);
+    response.add_answer(answer4);
+
     response.add_queries(queries);
 
     println!("response: {:?}", response);
