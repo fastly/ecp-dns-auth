@@ -14,14 +14,4 @@ debug = 1
 base64 = "0.13.0"
 fastly = "^0.8.7"
 serde_json = "1.0.85"
-
-
-# Upstream versions of these crates depend on tokio features that 
-# wasm doesn't support. Vendor in stub versions here with only the 
-# code that we need
-trust-dns-client = { version = "0.22.0", default-features = false, path = "crates/client" }
-trust-dns-server = { version = "0.22.0", default-features = false, path = "crates/server" }
-
-# In theory we can use the upstream version but we're vendoring it
-# to keep it in step with the crates above
-trust-dns-proto = { version = "0.22.0", default-features = false, path = "crates/proto" }
+trust-dns-proto = { version = "0.22.0", default-features = false }
