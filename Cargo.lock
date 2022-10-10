@@ -587,6 +587,7 @@ dependencies = [
  "ipnet",
  "lazy_static",
  "rand",
+ "serde",
  "smallvec",
  "thiserror",
  "tinyvec",
@@ -633,6 +634,7 @@ dependencies = [
  "form_urlencoded",
  "idna 0.3.0",
  "percent-encoding",
+ "serde",
 ]
 
 [[package]]
