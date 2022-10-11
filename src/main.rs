@@ -72,9 +72,8 @@ fn handle_dns_request(msg: Vec<u8>) -> Result<Vec<u8>, ProtoError> {
         _ => return dns_error(request, ResponseCode::FormErr).to_vec(),
     };
 
-    //handle_dns_query(request.header(), query.clone()).to_vec()
-    let result = lookup(query.name().to_lowercase(), query.query_type());
-    let response = dns_response(request.header(), query.clone(), result);
+    let result = lookup(query.name(), query.query_type());
+    let response = dns_response(request.header(), query, result);
     response.to_vec()
 }
 
@@ -138,8 +137,8 @@ fn handle_json_request(req: Request) -> Result<String, Error> {
         .and_then(|rr_type| RecordType::from_str(&rr_type.to_uppercase()).ok())
         .ok_or(anyhow!("Invalid 'type' parameter"))?;
 
-    let result = lookup(name.to_lowercase(), rr_type);
-    let response = dns_response(&Header::new(), Query::query(name, rr_type), result);
+    let result = lookup(&name, rr_type);
+    let response = dns_response(&Header::new(), &Query::query(name, rr_type), result);
 
     let header = response.header();
     let questions: Vec<JsonValue> = response
@@ -175,7 +174,7 @@ fn dns_error(request: Message, rcode: ResponseCode) -> Message {
     Message::error_msg(request.id(), request.op_code(), rcode)
 }
 
-fn dns_response(req_header: &Header, query: Query, result: LookupResult) -> Message {
+fn dns_response(req_header: &Header, query: &Query, result: LookupResult) -> Message {
     let mut header = Header::response_from_request(req_header);
     header.set_message_type(MessageType::Response);
     header.set_authoritative(true);
@@ -183,7 +182,7 @@ fn dns_response(req_header: &Header, query: Query, result: LookupResult) -> Mess
     let mut response = Message::new();
     response.set_header(header);
     response.set_response_code(result.rcode);
-    response.add_query(query);
+    response.add_query(query.clone());
     response.insert_answers(result.answers);
     response.insert_name_servers(result.authority);
     response.insert_additionals(result.additionals);
@@ -198,8 +197,9 @@ struct LookupResult {
     additionals: Vec<Record>,
 }
 
-fn lookup(name: Name, rr_type: RecordType) -> LookupResult {
+fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
     println!("lookup {}:{}", name, rr_type);
+    let name = name.to_lowercase();
     let answer = Record::from_rdata(name, 5, RData::A(Ipv4Addr::new(93, 184, 216, 34)));
     let answers = vec![answer];
 
