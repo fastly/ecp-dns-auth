@@ -2,8 +2,9 @@ use std::net::Ipv4Addr;
 use std::str::FromStr;
 
 // use fastly::handle::client_ip_addr;
+use fastly::error::anyhow;
 use fastly::http::{header, Method, StatusCode};
-use fastly::{Error, Request, Response};
+use fastly::{mime, Error, Request, Response};
 use serde_json::json;
 
 use trust_dns_proto::error::ProtoError;
@@ -11,7 +12,6 @@ use trust_dns_proto::op::{Header, Message, MessageType, OpCode, Query, ResponseC
 use trust_dns_proto::rr::{Name, RData, Record, RecordType};
 
 const MIME_APPLICATION_DNS: &str = "application/dns-message";
-const MIME_APPLICATION_JSON: &str = "application/json";
 
 fn handle_debug() -> Result<Response, Error> {
     let debug_json = json!({
@@ -21,7 +21,7 @@ fn handle_debug() -> Result<Response, Error> {
     })
     .to_string();
 
-    return Ok(Response::from_status(StatusCode::OK).with_body_text_plain(&debug_json));
+    Ok(Response::from_status(StatusCode::OK).with_body_text_plain(&debug_json))
 }
 
 fn handle_doh_get(req: Request) -> Result<Response, Error> {
@@ -46,8 +46,8 @@ fn handle_doh_request(raw_msg: Vec<u8>) -> Result<Response, Error> {
         Ok(response) => Ok(Response::from_status(StatusCode::OK)
             .with_body_octet_stream(&response)
             .with_header(header::CONTENT_TYPE, MIME_APPLICATION_DNS)),
-        _ => Ok(Response::from_status(StatusCode::BAD_REQUEST)
-            .with_body_text_plain("Unable to parse DNS query\n")),
+        Err(error) => Ok(Response::from_status(StatusCode::BAD_REQUEST)
+            .with_body_text_plain(&format!("Unable to parse DNS query: {}\n", error))),
     }
 }
 
@@ -73,37 +73,58 @@ fn handle_dns_request(raw_msg: Vec<u8>) -> Result<Vec<u8>, ProtoError> {
     };
     println!("query: {:?}", query);
 
-    return handle_dns_query(request.header(), query.clone()).to_vec();
+    //handle_dns_query(request.header(), query.clone()).to_vec()
+    let result = lookup(query.name().to_lowercase(), query.query_type());
+    let response = dns_response(request.header(), query.clone(), result);
+    println!("response: {:?}", response);
+    response.to_vec()
 }
 
 fn handle_json_get(req: Request) -> Result<Response, Error> {
-    let name = match req
+    match handle_json_request(req) {
+        Ok(json_response) => Ok(Response::from_status(StatusCode::OK)
+            .with_body_text_plain(&json_response)
+            .with_content_type(mime::APPLICATION_JSON)),
+        Err(error) => Ok(Response::from_status(StatusCode::BAD_REQUEST)
+            .with_body_text_plain(&format!("{}\n", error))),
+    }
+}
+
+fn handle_html_get(req: Request) -> Result<Response, Error> {
+    if req.get_query_parameter("name").is_none() {
+        return Ok(Response::from_status(StatusCode::OK)
+            .with_body(include_str!("query.html"))
+            .with_content_type(mime::TEXT_HTML_UTF_8));
+    }
+
+    let json_response = match handle_json_request(req) {
+        Ok(json_response) => json_response,
+        _ => "".to_string(),
+    };
+
+    // TODO templatize query.html and splat json_response into it
+    Ok(Response::from_status(StatusCode::OK)
+        .with_body_text_plain(&json_response)
+        .with_content_type(mime::APPLICATION_JSON))
+}
+
+fn handle_json_request(req: Request) -> Result<String, Error> {
+    let name = req
         .get_query_parameter("name")
         .and_then(|name| Name::from_str_relaxed(name).ok())
-    {
-        Some(name) => name,
-        _ => {
-            return Ok(Response::from_status(StatusCode::BAD_REQUEST)
-                .with_body_text_plain("Missing or invalid 'name' parameter\n"))
-        }
-    };
+        .ok_or(anyhow!("Missing or invalid 'name' parameter"))?;
 
-    let rr_type = match req
+    let rr_type = req
         .get_query_parameter("type")
         .or(req.get_query_parameter("rr_type"))
+        .or(Some("A"))
         .and_then(|rr_type| RecordType::from_str(&rr_type.to_uppercase()).ok())
-    {
-        Some(rr_type) => rr_type,
-        _ => {
-            return Ok(Response::from_status(StatusCode::BAD_REQUEST)
-                .with_body_text_plain("Missing or invalid 'type' parameter\n"))
-        }
-    };
+        .ok_or(anyhow!("Invalid 'type' parameter"))?;
 
-    // fake the header
-    let response = handle_dns_query(&Header::new(), Query::query(name, rr_type));
+    let result = lookup(name.to_lowercase(), rr_type);
+    let response = dns_response(&Header::new(), Query::query(name, rr_type), result);
 
-    let json = json!({
+    Ok(json!({
         "Status": response.response_code().low(),
         "StatusMessage": response.response_code().to_str(),
         "TC": response.header().truncated(),
@@ -116,11 +137,7 @@ fn handle_json_get(req: Request) -> Result<Response, Error> {
         "Authority": response.name_servers(),
         "Additional": response.additionals(),
     })
-    .to_string();
-
-    return Ok(Response::from_status(StatusCode::OK)
-        .with_body_text_plain(&json)
-        .with_header(header::CONTENT_TYPE, MIME_APPLICATION_JSON));
+    .to_string())
 }
 
 fn handle_dns_query(req_header: &Header, query: Query) -> Message {
@@ -141,9 +158,8 @@ fn dns_response(req_header: &Header, query: Query, result: LookupResult) -> Mess
 
     let mut response = Message::new();
     response.set_header(header);
-    response.add_query(query);
-
     response.set_response_code(result.rcode);
+    response.add_query(query);
     response.insert_answers(result.answers);
     response.insert_name_servers(result.authority);
     response.insert_additionals(result.additionals);
@@ -163,13 +179,17 @@ fn lookup(name: Name, rr_type: RecordType) -> LookupResult {
     let answer = Record::from_rdata(name, 5, RData::A(Ipv4Addr::new(93, 184, 216, 34)));
     let answers = vec![answer];
 
-    let result = LookupResult {
+    LookupResult {
         rcode: ResponseCode::NoError,
         answers: answers,
         authority: Vec::new(),
         additionals: Vec::new(),
-    };
-    return result;
+    }
+}
+
+fn return_404() -> Result<Response, Error> {
+    Ok(Response::from_status(StatusCode::NOT_FOUND)
+        .with_body_text_plain(StatusCode::NOT_FOUND.as_str()))
 }
 
 #[fastly::main]
@@ -179,23 +199,11 @@ fn main(req: Request) -> Result<Response, Error> {
         req.get_path(),
         req.get_header_str(header::CONTENT_TYPE),
     ) {
-        (&Method::GET, "/dns-query", Some(MIME_APPLICATION_DNS)) => handle_doh_get(req),
         (&Method::POST, "/dns-query", Some(MIME_APPLICATION_DNS)) => handle_doh_post(req),
-
+        (&Method::GET, "/dns-query", Some(MIME_APPLICATION_DNS)) => handle_doh_get(req),
         (&Method::GET, "/resolve", ..) => handle_json_get(req),
-        (&Method::GET, "/query", ..) => {
-            return Ok(
-                Response::from_status(StatusCode::OK).with_body_text_plain("TODO html form\n")
-            )
-        }
-
+        (&Method::GET, "/query", ..) => handle_html_get(req),
         (&Method::GET, "/debug", ..) => handle_debug(),
-
-        _ => {
-            // Catch all other requests and return a 404.
-            return Ok(
-                Response::from_status(StatusCode::NOT_FOUND).with_body_text_plain("Not Found\n")
-            );
-        }
+        _ => return_404(),
     }
 }
