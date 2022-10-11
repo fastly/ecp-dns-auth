@@ -5,7 +5,7 @@ use std::str::FromStr;
 use fastly::error::anyhow;
 use fastly::http::{header, Method, StatusCode};
 use fastly::{mime, Error, Request, Response};
-use serde_json::json;
+use serde_json::{json, to_string_pretty, Value as JsonValue};
 
 use trust_dns_proto::error::ProtoError;
 use trust_dns_proto::op::{Header, Message, MessageType, OpCode, Query, ResponseCode};
@@ -47,15 +47,13 @@ fn handle_doh_request(raw_msg: Vec<u8>) -> Result<Response, Error> {
             .with_body_octet_stream(&response)
             .with_header(header::CONTENT_TYPE, MIME_APPLICATION_DNS)),
         Err(error) => Ok(Response::from_status(StatusCode::BAD_REQUEST)
-            .with_body_text_plain(&format!("Unable to parse DNS query: {}\n", error))),
+            .with_body_text_plain(&format!("Invalid DNS query: {}\n", error))),
     }
 }
 
-fn handle_dns_request(raw_msg: Vec<u8>) -> Result<Vec<u8>, ProtoError> {
-    println!("raw_msg: {:X?}", raw_msg);
-
-    let request = Message::from_vec(&raw_msg)?;
-    println!("request: {:?}", request);
+fn handle_dns_request(msg: Vec<u8>) -> Result<Vec<u8>, ProtoError> {
+    let request = Message::from_vec(&msg)?;
+    // println!("request: {:?}", request);
 
     // at this point we have a well-formed DNS message so even in the
     // case of other errors we will be returning a DNS response.
@@ -71,12 +69,10 @@ fn handle_dns_request(raw_msg: Vec<u8>) -> Result<Vec<u8>, ProtoError> {
         Some(query) if request.queries().len() == 1 => query,
         _ => return dns_error(request, ResponseCode::FormErr).to_vec(),
     };
-    println!("query: {:?}", query);
 
     //handle_dns_query(request.header(), query.clone()).to_vec()
     let result = lookup(query.name().to_lowercase(), query.query_type());
     let response = dns_response(request.header(), query.clone(), result);
-    println!("response: {:?}", response);
     response.to_vec()
 }
 
@@ -90,7 +86,7 @@ fn handle_json_get(req: Request) -> Result<Response, Error> {
     }
 }
 
-fn handle_html_get(req: Request) -> Result<Response, Error> {
+fn handle_form_get(req: Request) -> Result<Response, Error> {
     if req.get_query_parameter("name").is_none() {
         return Ok(Response::from_status(StatusCode::OK)
             .with_body(include_str!("query.html"))
@@ -106,6 +102,22 @@ fn handle_html_get(req: Request) -> Result<Response, Error> {
     Ok(Response::from_status(StatusCode::OK)
         .with_body_text_plain(&json_response)
         .with_content_type(mime::APPLICATION_JSON))
+}
+
+fn json_records(records: &[Record]) -> Vec<JsonValue> {
+    let json_records: Vec<JsonValue> = records
+        .iter()
+        .map(|r| {
+            json!({
+            "name": r.name(),
+            // "type": u16::from(r.record_type()),
+            "type": r.record_type(),
+            "TTL": r.ttl(),
+            "data": r.data(),
+            })
+        })
+        .collect();
+    json_records
 }
 
 fn handle_json_request(req: Request) -> Result<String, Error> {
@@ -124,27 +136,34 @@ fn handle_json_request(req: Request) -> Result<String, Error> {
     let result = lookup(name.to_lowercase(), rr_type);
     let response = dns_response(&Header::new(), Query::query(name, rr_type), result);
 
-    Ok(json!({
-        "Status": response.response_code().low(),
-        "StatusMessage": response.response_code().to_str(),
-        "TC": response.header().truncated(),
-        "RD": response.header().recursion_desired(),
-        "RA": response.header().recursion_available(),
-        "AD": response.header().authoritative(),
-        "CD": response.header().checking_disabled(),
-        //"Question": response.queries(),
-        "Answer": response.answers(),
-        "Authority": response.name_servers(),
-        "Additional": response.additionals(),
-    })
-    .to_string())
-}
+    let header = response.header();
+    let questions: Vec<JsonValue> = response
+        .queries()
+        .iter()
+        .map(|q| {
+            json!({
+            "name": q.name(),
+            // "type": u16::from(q.query_type()),
+            "type": q.query_type()})
+        })
+        .collect();
 
-fn handle_dns_query(req_header: &Header, query: Query) -> Message {
-    let result = lookup(query.name().to_lowercase(), query.query_type());
-    let response = dns_response(req_header, query, result);
-    println!("response: {:?}", response);
-    response
+    match to_string_pretty(&json!({
+        // "Status": response.response_code().low(),
+        "Status": response.response_code().to_str(),
+        "TC": header.truncated(),
+        "RD": header.recursion_desired(),
+        "RA": header.recursion_available(),
+        "AD": header.authoritative(),
+        "CD": header.checking_disabled(),
+        "Question": questions,
+        "Answer": json_records(response.answers()),
+        "Authority": json_records(response.name_servers()),
+        "Additional": json_records(response.additionals()),
+    })) {
+        Ok(json_response) => Ok(json_response),
+        _ => Err(anyhow!("JSON encoding error")),
+    }
 }
 
 fn dns_error(request: Message, rcode: ResponseCode) -> Message {
@@ -163,7 +182,7 @@ fn dns_response(req_header: &Header, query: Query, result: LookupResult) -> Mess
     response.insert_answers(result.answers);
     response.insert_name_servers(result.authority);
     response.insert_additionals(result.additionals);
-
+    println!("response: {:?}", response);
     response
 }
 
@@ -202,7 +221,7 @@ fn main(req: Request) -> Result<Response, Error> {
         (&Method::POST, "/dns-query", Some(MIME_APPLICATION_DNS)) => handle_doh_post(req),
         (&Method::GET, "/dns-query", Some(MIME_APPLICATION_DNS)) => handle_doh_get(req),
         (&Method::GET, "/resolve", ..) => handle_json_get(req),
-        (&Method::GET, "/query", ..) => handle_html_get(req),
+        (&Method::GET, "/query", ..) => handle_form_get(req),
         (&Method::GET, "/debug", ..) => handle_debug(),
         _ => return_404(),
     }
