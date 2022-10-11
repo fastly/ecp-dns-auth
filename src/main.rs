@@ -199,6 +199,12 @@ fn return_404() -> Result<Response, Error> {
 
 #[fastly::main]
 fn main(req: Request) -> Result<Response, Error> {
+    println!(
+        "{} {} {:?}",
+        req.get_method(),
+        req.get_url(),
+        req.get_header_str(header::CONTENT_TYPE)
+    );
     match (
         req.get_method(),
         req.get_path(),
