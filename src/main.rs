@@ -209,6 +209,6 @@ fn main(req: Request) -> Result<Response, Error> {
         (&Method::GET, "/resolve", ..) => handle_json_get(req),
         (&Method::GET, "/query", ..) => handle_form_get(req),
         (&Method::GET, "/debug", ..) => handle_debug(),
-        _ => return_404(),
+        _ => handle_form_get(req),
     }
 }
