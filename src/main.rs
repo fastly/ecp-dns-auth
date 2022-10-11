@@ -5,6 +5,8 @@ use std::str::FromStr;
 use fastly::error::anyhow;
 use fastly::http::{header, Method, StatusCode};
 use fastly::{mime, Error, Request, Response};
+use handlebars::Handlebars;
+use serde::Serialize;
 use serde_json::{json, to_string_pretty, Value as JsonValue};
 
 use trust_dns_proto::error::ProtoError;
@@ -86,22 +88,25 @@ fn handle_json_get(req: Request) -> Result<Response, Error> {
     }
 }
 
-fn handle_form_get(req: Request) -> Result<Response, Error> {
-    if req.get_query_parameter("name").is_none() {
-        return Ok(Response::from_status(StatusCode::OK)
-            .with_body(include_str!("query.html"))
-            .with_content_type(mime::TEXT_HTML_UTF_8));
-    }
+#[derive(Serialize)]
+struct Params {
+    json: String,
+}
 
+fn handle_form_get(req: Request) -> Result<Response, Error> {
     let json_response = match handle_json_request(req) {
         Ok(json_response) => json_response,
         _ => "".to_string(),
     };
 
-    // TODO templatize query.html and splat json_response into it
+    let params = Params {
+        json: json_response,
+    };
+
+    let template = Handlebars::new().render_template(include_str!("query.html"), &params)?;
     Ok(Response::from_status(StatusCode::OK)
-        .with_body_text_plain(&json_response)
-        .with_content_type(mime::APPLICATION_JSON))
+        .with_body_text_plain(&template)
+        .with_content_type(mime::TEXT_HTML_UTF_8))
 }
 
 fn json_records(records: &[Record]) -> Vec<JsonValue> {

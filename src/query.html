@@ -7,24 +7,75 @@
       name="viewport"
       content="width=device-width, initial-scale=1, shrink-to-fit=no"
     />
-    <title>Welcome to Compute@Edge</title>
+    <title>Fastly Authoritative DNS</title>
     <link
       rel="icon"
       href="https://developer.fastly.com/favicon-32x32.png"
       type="image/png"
     />
+<link href="https://res.cloudinary.com/finnhvman/raw/upload/matter/matter-0.2.2.min.css" rel="stylesheet">
   </head>
   <body>
-    <iframe
-      src="https://developer.fastly.com/compute-welcome"
-      style="
-        border: 0;
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-      "
-    ></iframe>
+
+    <form action="/query" method="GET">
+        <header>
+            <div class="content">
+                <a href="/">
+                    <img src="https://developer.fastly.com/favicon.png" alt="Fastly logo">
+                    <h1>Fastly Authoritative DNS</h1>
+                </a>
+                <label class="matter-textfield-outlined">
+                    <input value="example.com" type="text" name="name" placeholder="&nbsp;">
+                    <span>DNS Name</span>
+                </label>
+            <label class="matter-textfield-outlined">
+                <input value="A" type="text" name="rr_type" list="rr_types" placeholder="&nbsp;" size="10">
+                <span>RR Type</span>
+            </label>
+            <datalist id="rr_types">
+                <option value="A"></option>
+                <option value="AAAA"></option>
+                <option value="ALL"></option>
+                <option value="CAA"></option>
+                <option value="CDS"></option>
+                <option value="CERT"></option>
+                <option value="CNAME"></option>
+                <option value="DNAME"></option>
+                <option value="DNSKEY"></option>
+                <option value="DS"></option>
+                <option value="HINFO"></option>
+                <option value="HTTPS"></option>
+                <option value="INTEGRITY"></option>
+                <option value="IPSECKEY"></option>
+                <option value="KEY"></option>
+                <option value="MX"></option>
+                <option value="NAPTR"></option>
+                <option value="NS"></option>
+                <option value="NSEC"></option>
+                <option value="NSEC3"></option>
+                <option value="NSEC3PARAM"></option>
+                <option value="PTR"></option>
+                <option value="RP"></option>
+                <option value="RRSIG"></option>
+                <option value="SIG"></option>
+                <option value="SOA"></option>
+                <option value="SPF"></option>
+                <option value="SRV"></option>
+                <option value="SSHFP"></option>
+                <option value="SVCB"></option>
+                <option value="TLSA"></option>
+                <option value="TXT"></option>
+                <option value="WKS"></option>
+            </datalist>
+
+                <button class="matter-button-contained matter-primary" type="submit">Resolve</button>
+            </div>
+        </header>
+        <div class="content">
+            <pre class="output" id="results">{{ json }}</pre>
+        </div>
+    </form>
   </body>
 </html>
+
+
