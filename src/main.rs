@@ -1,4 +1,3 @@
-use std::net::Ipv4Addr;
 use std::str::FromStr;
 
 // use fastly::handle::client_ip_addr;
@@ -11,7 +10,10 @@ use serde_json::{json, to_string_pretty, Value as JsonValue};
 
 use trust_dns_proto::error::ProtoError;
 use trust_dns_proto::op::{Header, Message, MessageType, OpCode, Query, ResponseCode};
-use trust_dns_proto::rr::{Name, RData, Record, RecordType};
+use trust_dns_proto::rr::{Name, Record, RecordType};
+
+mod lookup;
+use crate::lookup::{lookup, LookupResult};
 
 const MIME_APPLICATION_DNS: &str = "application/dns-message";
 
@@ -188,27 +190,6 @@ fn dns_response(req_header: &Header, query: &Query, result: LookupResult) -> Mes
     response.insert_additionals(result.additionals);
     println!("response: {:?}", response);
     response
-}
-
-struct LookupResult {
-    rcode: ResponseCode,
-    answers: Vec<Record>,
-    authority: Vec<Record>,
-    additionals: Vec<Record>,
-}
-
-fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
-    println!("lookup {}:{}", name, rr_type);
-    let name = name.to_lowercase();
-    let answer = Record::from_rdata(name, 5, RData::A(Ipv4Addr::new(93, 184, 216, 34)));
-    let answers = vec![answer];
-
-    LookupResult {
-        rcode: ResponseCode::NoError,
-        answers: answers,
-        authority: Vec::new(),
-        additionals: Vec::new(),
-    }
 }
 
 fn return_404() -> Result<Response, Error> {
