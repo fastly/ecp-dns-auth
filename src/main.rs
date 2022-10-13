@@ -134,7 +134,7 @@ fn handle_json_request(req: Request) -> Result<String, Error> {
 
     let rr_type = req
         .get_query_parameter("type")
-        .or(req.get_query_parameter("rr_type"))
+        .or_else(|| req.get_query_parameter("rr_type"))
         .or(Some("A"))
         .and_then(|rr_type| RecordType::from_str(&rr_type.to_uppercase()).ok())
         .ok_or(anyhow!("Invalid 'type' parameter"))?;
@@ -190,11 +190,6 @@ fn dns_response(req_header: &Header, query: &Query, result: LookupResult) -> Mes
     response.insert_additionals(result.additionals);
     println!("response: {:?}", response);
     response
-}
-
-fn return_404() -> Result<Response, Error> {
-    Ok(Response::from_status(StatusCode::NOT_FOUND)
-        .with_body_text_plain(StatusCode::NOT_FOUND.as_str()))
 }
 
 #[fastly::main]
