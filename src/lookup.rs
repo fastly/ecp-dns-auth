@@ -59,10 +59,15 @@ pub fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
 
     // If we got here we failed to find answers because the name
     // and wildcard don't exist or don't have records of rr_type.
-    // Walk up the tree looking for the SOA record at the top of the zone.
+    // Check the current rrs and then walk up the tree looking for
+    // the SOA record at the top of the zone.
     // If we find it, add it to the authority section and return.
     // Otherwise return REFUSED because we don't serve this domain.
-    lname = lname.base_name();
+
+    // TODO we already have the rrmap for the current name above;
+    // check it before walking up the tree and start with:
+    // lname = lname.base_name();
+
     while lname.num_labels() >= 2 {
         println!("lookup {}:SOA", lname);
         match store.get(&lname.to_string()) {
@@ -108,13 +113,13 @@ struct JsonRRMap {
 #[derive(Deserialize, Debug)]
 struct JsonA {
     ttl: u32,
-    values: Vec<String>,
+    values: Vec<Ipv4Addr>,
 }
 
 #[derive(Deserialize, Debug)]
 struct JsonSOAValue {
-    mname: String,
-    rname: String,
+    mname: Name,
+    rname: Name,
     serial: u32,
     refresh: i32,
     retry: i32,
@@ -131,6 +136,7 @@ struct JsonSOA {
 fn decode_json_rrs(name: &Name, rr_type: RecordType, rrmap: &JsonRRMap) -> Vec<Record> {
     match (rr_type, rrmap) {
         (RecordType::A, JsonRRMap { A: Some(A), .. }) => json_a(name, A),
+        (RecordType::SOA, JsonRRMap { SOA: Some(SOA), .. }) => json_soa(name, SOA),
         _ => Vec::new(), // couldn't find rrs of the requested type
     }
 }
@@ -140,9 +146,8 @@ fn json_soa(name: &Name, rrs: &JsonSOA) -> Vec<Record> {
         name.clone(),
         rrs.ttl,
         RData::SOA(rdata::SOA::new(
-            // TODO handle errors here
-            Name::from_str(&rrs.value.mname).unwrap(),
-            Name::from_str(&rrs.value.rname).unwrap(),
+            rrs.value.mname.clone(),
+            rrs.value.rname.clone(),
             rrs.value.serial,
             rrs.value.refresh,
             rrs.value.retry,
@@ -155,13 +160,6 @@ fn json_soa(name: &Name, rrs: &JsonSOA) -> Vec<Record> {
 fn json_a(name: &Name, rrs: &JsonA) -> Vec<Record> {
     rrs.values
         .iter()
-        .map(|v| {
-            Record::from_rdata(
-                name.clone(),
-                rrs.ttl,
-                // TODO handle errors here
-                RData::A(Ipv4Addr::from_str(v).unwrap()),
-            )
-        })
+        .map(|v| Record::from_rdata(name.clone(), rrs.ttl, RData::A(*v)))
         .collect()
 }
