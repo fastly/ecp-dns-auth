@@ -23,6 +23,26 @@
                 <a href="/query">
                     <h3 class="matter-h3">Fastly Authoritative DNS</h3>
                 </a>
+                <p>Currently serving:</p>
+                <pre>
+example.com.         3600    SOA  ns1.example.com. admin.example.com. 2010111201 10800 3600 1209600 3600
+example.com.         3600    NS   ns1.example.com.
+example.com.         3600    NS   ns2.example.com.
+example.com.         3600    MX   10 mail.example.com.
+ns1.example.com.     3600    A    192.0.2.1
+ns1.example.com.     3600    A    192.0.3.1
+ns1.example.com.     3600    AAAA 2001:DB8::1
+ns2.example.com.     3600    A    192.0.2.2
+ns2.example.com.     3600    AAAA 2001:DB8::2
+mail.example.com.    3600    A    192.0.2.3
+mail.example.com.    3600    AAAA 2001:DB8::3
+*.example.com.       3600    A    192.0.2.4
+*.example.com.       3600    AAAA 2001:DB8::4
+test.sub.example.com 3600    A    192.0.2.5
+test.sub.example.com 3600    AAAA 2001:DB8::5
+*.sub.example.com    3600    A    192.0.2.6.
+*.sub.example.com    3600    AAAA 2001:DB8::6
+                </pre>
                 <label class="matter-textfield-outlined">
                     <input value="example.com" type="text" name="name" placeholder="&nbsp;">
                     <span>DNS Name</span>

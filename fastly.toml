@@ -42,7 +42,8 @@ service_id = "1qsHXbzrPme5M3iXsUjE3s"
       "ns2.example.com." = """\
 {"A": {"ttl": 3600, "values": ["192.0.2.2"]},
 "AAAA": {"ttl": 3600, "values": ["2001:DB8::2"]}
-}"""
+}
+"""
       "mail.example.com." = """\
 {"A": {"ttl": 3600, "values": ["192.0.2.3"]},
 "AAAA": {"ttl": 3600, "values": ["2001:DB8::3"]}
