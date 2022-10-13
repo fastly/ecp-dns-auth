@@ -27,10 +27,9 @@ pub fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
 
     let store = ConfigStore::open("zones");
 
+    // look for the name or the wildcard
     let mut lname = name.to_lowercase();
     lname.set_fqdn(true);
-
-    // look for the name or the wildcard
     match store
         .get(&lname.to_string())
         .or_else(|| store.get(&lname.clone().into_wildcard().to_string()))
@@ -46,10 +45,7 @@ pub fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
                 }
             };
             println!("{}: {:?}", lname, rrmap);
-            result.answers = match (rr_type, rrmap) {
-                (RecordType::A, JsonRRMap { A: Some(A), .. }) => json_a(name, A),
-                _ => Vec::new(), // couldn't find rrs of the requested type
-            }
+            result.answers = decode_json_rrs(name, rr_type, &rrmap);
         }
         _ => {
             // name and wildcard don't exist
@@ -61,15 +57,14 @@ pub fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
         return result;
     }
 
-    // If we got here we failed to return answers because the name
+    // If we got here we failed to find answers because the name
     // and wildcard don't exist or don't have records of rr_type.
     // Walk up the tree looking for the SOA record at the top of the zone.
     // If we find it, add it to the authority section and return.
     // Otherwise return REFUSED because we don't serve this domain.
-
     lname = lname.base_name();
     while lname.num_labels() >= 2 {
-        println!("looking for {}", lname);
+        println!("lookup {}:SOA", lname);
         match store.get(&lname.to_string()) {
             Some(rrmapstr) => {
                 // found a name; decode the rr map
@@ -84,7 +79,7 @@ pub fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
                 println!("{}: {:?}", lname, rrmap);
                 match rrmap.SOA {
                     Some(rrs) => {
-                        result.authority = json_soa(name, rrs);
+                        result.authority = json_soa(name, &rrs);
                         return result;
                     }
                     _ => {
@@ -133,7 +128,14 @@ struct JsonSOA {
     value: JsonSOAValue,
 }
 
-fn json_soa(name: &Name, rrs: JsonSOA) -> Vec<Record> {
+fn decode_json_rrs(name: &Name, rr_type: RecordType, rrmap: &JsonRRMap) -> Vec<Record> {
+    match (rr_type, rrmap) {
+        (RecordType::A, JsonRRMap { A: Some(A), .. }) => json_a(name, A),
+        _ => Vec::new(), // couldn't find rrs of the requested type
+    }
+}
+
+fn json_soa(name: &Name, rrs: &JsonSOA) -> Vec<Record> {
     vec![Record::from_rdata(
         name.clone(),
         rrs.ttl,
@@ -150,7 +152,7 @@ fn json_soa(name: &Name, rrs: JsonSOA) -> Vec<Record> {
     )]
 }
 
-fn json_a(name: &Name, rrs: JsonA) -> Vec<Record> {
+fn json_a(name: &Name, rrs: &JsonA) -> Vec<Record> {
     rrs.values
         .iter()
         .map(|v| {
