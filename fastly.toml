@@ -10,3 +10,56 @@ service_id = "1qsHXbzrPme5M3iXsUjE3s"
 
 [scripts]
   build = "cargo build --bin ecp-dns-auth --release --target wasm32-wasi --color always"
+
+[local_server]
+  [local_server.dictionaries]
+    [local_server.dictionaries.zones]
+      format = "inline-toml"
+    [local_server.dictionaries.zones.contents]
+      "example.com." = """\
+{
+  "SOA": {
+    "ttl": 3600,
+    "value": {
+        "mname": "ns1.example.com.",
+        "rname": "admin.example.com.",
+        "serial": 2010111201,
+        "refresh": 10800,
+        "retry": 3600,
+        "expire": 1209600,
+        "minimum": 3600
+      }
+  },
+  "NS": {"ttl": 3600, "values": ["ns1.example.com.", "ns2.example.com."]},
+  "MX": {"ttl": 3600, "values": [{"exchange": "mail.example.com.", "preference": 10}]}
+}
+"""
+      "ns1.example.com." = """\
+{"A": {"ttl": 3600, "values": ["192.0.2.1", "192.0.3.1"]},
+"AAAA": {"ttl": 3600, "values": ["2001:DB8::1"]}
+}
+"""
+      "ns2.example.com." = """\
+{"A": {"ttl": 3600, "values": ["192.0.2.2"]},
+"AAAA": {"ttl": 3600, "values": ["2001:DB8::2"]}
+}"""
+      "mail.example.com." = """\
+{"A": {"ttl": 3600, "values": ["192.0.2.3"]},
+"AAAA": {"ttl": 3600, "values": ["2001:DB8::3"]}
+}
+"""
+      "*.example.com." = """\
+{"A": {"ttl": 3600, "values": ["192.0.2.4"]},
+"AAAA": {"ttl": 3600, "values": ["2001:DB8::4"]}
+}
+"""
+      "test.sub.example.com." = """\
+{"A": {"ttl": 3600, "values": ["192.0.2.5"]},
+"AAAA": {"ttl": 3600, "values": ["2001:DB8::5"]}
+}
+"""
+      "*.sub.example.com." = """\
+{"A": {"ttl": 3600, "values": ["192.0.2.6"]},
+"AAAA": {"ttl": 3600, "values": ["2001:DB8::6"]}
+}
+"""
