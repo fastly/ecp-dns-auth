@@ -83,7 +83,7 @@ pub fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
                 println!("{}: {:?}", lname, rrmap);
                 match rrmap.SOA {
                     Some(rrs) => {
-                        result.authority = json_soa(name, &rrs);
+                        result.authority = json_soa(&lname, &rrs);
                         return result;
                     }
                     _ => {
