@@ -2,6 +2,7 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 
 use fastly::config_store::ConfigStore;
 use serde::Deserialize;
+use tracing::{event, instrument, Level};
 
 use trust_dns_proto::op::ResponseCode;
 use trust_dns_proto::rr::rdata;
@@ -14,9 +15,8 @@ pub struct LookupResult {
     pub additionals: Vec<Record>,
 }
 
+#[instrument]
 pub fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
-    println!("lookup {}:{}", name, rr_type);
-
     let mut result = LookupResult {
         rcode: ResponseCode::NoError,
         answers: Vec::new(),
@@ -39,12 +39,17 @@ pub fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
             let rrmap: JsonRRMap = match serde_json::from_str(&rrmapstr) {
                 Ok(rrmap) => rrmap,
                 Err(err) => {
-                    println!("ERROR: bad json data in {} or wildcard: {}", name, err);
+                    event!(
+                        Level::ERROR,
+                        "bad json data in {} or wildcard: {}",
+                        name,
+                        err
+                    );
                     result.rcode = ResponseCode::ServFail;
                     return result;
                 }
             };
-            println!("{}: {:?}", lname, rrmap);
+            event!(Level::DEBUG, "{}: {:?}", lname, rrmap);
             result.answers = decode_json_rrs(name, rr_type, &rrmap);
         }
         _ => {
@@ -69,19 +74,18 @@ pub fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
     // lname = lname.base_name();
 
     while lname.num_labels() >= 2 {
-        println!("lookup {}:SOA", lname);
         match store.get(&lname.to_string()) {
             Some(rrmapstr) => {
                 // found a name; decode the rr map
                 let rrmap: JsonRRMap = match serde_json::from_str(&rrmapstr) {
                     Ok(rrmap) => rrmap,
                     Err(err) => {
-                        println!("ERROR: bad json data in {}: {}", name, err);
+                        event!(Level::ERROR, "bad json data in {}: {}", name, err);
                         result.rcode = ResponseCode::ServFail;
                         return result;
                     }
                 };
-                println!("{}: {:?}", lname, rrmap);
+                event!(Level::DEBUG, "{}: {:?}", lname, rrmap);
                 match rrmap.SOA {
                     Some(rrs) => {
                         result.authority = json_soa(&lname, &rrs);

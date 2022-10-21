@@ -7,6 +7,8 @@ use fastly::{mime, Error, Request, Response};
 use handlebars::Handlebars;
 use serde::Serialize;
 use serde_json::{json, to_string_pretty, Value as JsonValue};
+use tracing::{event, instrument, Level};
+use tracing_subscriber::fmt::format;
 
 use trust_dns_proto::error::ProtoError;
 use trust_dns_proto::op::{Header, Message, MessageType, OpCode, Query, ResponseCode};
@@ -17,6 +19,7 @@ use crate::lookup::{lookup, LookupResult};
 
 const MIME_APPLICATION_DNS: &str = "application/dns-message";
 
+#[instrument]
 fn handle_debug() -> Result<Response, Error> {
     let debug_json = json!({
         "version": std::env::var("FASTLY_SERVICE_VERSION").unwrap_or_else(|_| String::new()),
@@ -28,6 +31,7 @@ fn handle_debug() -> Result<Response, Error> {
     Ok(Response::from_status(StatusCode::OK).with_body_text_plain(&debug_json))
 }
 
+#[instrument(skip_all)]
 fn handle_doh_get(req: Request) -> Result<Response, Error> {
     match req
         .get_query_parameter("dns")
@@ -41,6 +45,7 @@ fn handle_doh_get(req: Request) -> Result<Response, Error> {
     };
 }
 
+#[instrument(skip_all)]
 fn handle_doh_post(req: Request) -> Result<Response, Error> {
     handle_doh_request(req.into_body_bytes())
 }
@@ -57,7 +62,7 @@ fn handle_doh_request(raw_msg: Vec<u8>) -> Result<Response, Error> {
 
 fn handle_dns_request(msg: Vec<u8>) -> Result<Vec<u8>, ProtoError> {
     let request = Message::from_vec(&msg)?;
-    // println!("request: {:?}", request);
+    event!(Level::DEBUG, "request: {:?}", request);
 
     // at this point we have a well-formed DNS message so even in the
     // case of other errors we will be returning a DNS response.
@@ -79,6 +84,7 @@ fn handle_dns_request(msg: Vec<u8>) -> Result<Vec<u8>, ProtoError> {
     response.to_vec()
 }
 
+#[instrument(skip_all)]
 fn handle_json_get(req: Request) -> Result<Response, Error> {
     match handle_json_request(req) {
         Ok(json_response) => Ok(Response::from_status(StatusCode::OK)
@@ -94,6 +100,7 @@ struct Params {
     json: String,
 }
 
+#[instrument(skip_all)]
 fn handle_form_get(req: Request) -> Result<Response, Error> {
     let json_response = match handle_json_request(req) {
         Ok(json_response) => json_response,
@@ -188,18 +195,30 @@ fn dns_response(req_header: &Header, query: &Query, result: LookupResult) -> Mes
     response.insert_answers(result.answers);
     response.insert_name_servers(result.authority);
     response.insert_additionals(result.additionals);
-    println!("response: {:?}", response);
+    event!(Level::DEBUG, "response: {:?}", response);
     response
+}
+
+fn install_tracing_subscriber() {
+    tracing_subscriber::fmt()
+        // .with_max_level(Level::INFO)
+        .with_max_level(Level::DEBUG)
+        .with_span_events(format::FmtSpan::CLOSE)
+        .init();
 }
 
 #[fastly::main]
 fn main(req: Request) -> Result<Response, Error> {
-    println!(
+    install_tracing_subscriber();
+
+    event!(
+        Level::INFO,
         "{} {} {:?}",
         req.get_method(),
         req.get_url(),
         req.get_header_str(header::CONTENT_TYPE)
     );
+
     match (
         req.get_method(),
         req.get_path(),
