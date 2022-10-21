@@ -24,7 +24,8 @@ pub fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
         additionals: Vec::new(),
     };
 
-    let store = ConfigStore::open("zones");
+    // let store = ConfigStore::open("zones"); // edge dictionary
+    let store = ConfigStore::open("cs_zones");
 
     // look for the name or the wildcard
     let mut lname = name.to_lowercase();

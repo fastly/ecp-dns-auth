@@ -13,9 +13,9 @@ service_id = "1qsHXbzrPme5M3iXsUjE3s"
 
 [local_server]
   [local_server.dictionaries]
-    [local_server.dictionaries.zones]
+    [local_server.dictionaries.cs_zones]
       format = "inline-toml"
-    [local_server.dictionaries.zones.contents]
+    [local_server.dictionaries.cs_zones.contents]
       "example.com." = """\
 {
   "SOA": {
