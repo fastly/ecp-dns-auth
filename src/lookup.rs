@@ -2,7 +2,7 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 
 use fastly::config_store::ConfigStore;
 use serde::Deserialize;
-use tracing::{event, instrument, Level};
+use tracing::{debug, error, instrument};
 
 use trust_dns_proto::op::ResponseCode;
 use trust_dns_proto::rr::rdata;
@@ -39,17 +39,12 @@ pub fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
             let rrmap: JsonRRMap = match serde_json::from_str(&rrmapstr) {
                 Ok(rrmap) => rrmap,
                 Err(err) => {
-                    event!(
-                        Level::ERROR,
-                        "bad json data in {} or wildcard: {}",
-                        name,
-                        err
-                    );
+                    error!("bad json data in {} or wildcard: {}", name, err);
                     result.rcode = ResponseCode::ServFail;
                     return result;
                 }
             };
-            event!(Level::DEBUG, "{}: {:?}", lname, rrmap);
+            debug!("{}: {:?}", lname, rrmap);
             result.answers = decode_json_rrs(name, rr_type, &rrmap);
         }
         _ => {
@@ -80,12 +75,12 @@ pub fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
                 let rrmap: JsonRRMap = match serde_json::from_str(&rrmapstr) {
                     Ok(rrmap) => rrmap,
                     Err(err) => {
-                        event!(Level::ERROR, "bad json data in {}: {}", name, err);
+                        error!("bad json data in {}: {}", name, err);
                         result.rcode = ResponseCode::ServFail;
                         return result;
                     }
                 };
-                event!(Level::DEBUG, "{}: {:?}", lname, rrmap);
+                debug!("{}: {:?}", lname, rrmap);
                 match rrmap.SOA {
                     Some(rrs) => {
                         result.authority = json_soa(&lname, &rrs);

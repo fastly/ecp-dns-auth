@@ -7,7 +7,7 @@ use fastly::{mime, Error, Request, Response};
 use handlebars::Handlebars;
 use serde::Serialize;
 use serde_json::{json, to_string_pretty, Value as JsonValue};
-use tracing::{event, instrument, Level};
+use tracing::{debug, info, instrument, Level};
 use tracing_subscriber::fmt::format;
 
 use trust_dns_proto::error::ProtoError;
@@ -62,7 +62,7 @@ fn handle_doh_request(raw_msg: Vec<u8>) -> Result<Response, Error> {
 
 fn handle_dns_request(msg: Vec<u8>) -> Result<Vec<u8>, ProtoError> {
     let request = Message::from_vec(&msg)?;
-    event!(Level::DEBUG, "request: {:?}", request);
+    debug!("request: {:?}", request);
 
     // at this point we have a well-formed DNS message so even in the
     // case of other errors we will be returning a DNS response.
@@ -195,7 +195,7 @@ fn dns_response(req_header: &Header, query: &Query, result: LookupResult) -> Mes
     response.insert_answers(result.answers);
     response.insert_name_servers(result.authority);
     response.insert_additionals(result.additionals);
-    event!(Level::DEBUG, "response: {:?}", response);
+    debug!("response: {:?}", response);
     response
 }
 
@@ -211,8 +211,7 @@ fn install_tracing_subscriber() {
 fn main(req: Request) -> Result<Response, Error> {
     install_tracing_subscriber();
 
-    event!(
-        Level::INFO,
+    info!(
         "{} {} {:?}",
         req.get_method(),
         req.get_url(),
