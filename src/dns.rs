@@ -29,27 +29,28 @@ pub fn dns_response(req_header: &Header, query: &Query, result: LookupResult) ->
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "UPPERCASE")]
 pub struct JsonRRMap {
-    A: Option<JsonA>,
-    AAAA: Option<JsonAAAA>,
-    MX: Option<JsonMX>,
-    NS: Option<JsonNS>,
-    SOA: Option<JsonSOA>,
+    a: Option<JsonA>,
+    aaaa: Option<JsonAAAA>,
+    mx: Option<JsonMX>,
+    ns: Option<JsonNS>,
+    soa: Option<JsonSOA>,
 }
 
 impl JsonRRMap {
     pub fn get(&self, name: &Name, rr_type: RecordType) -> Vec<Record> {
         match (rr_type, self) {
-            (RecordType::A, JsonRRMap { A: Some(a), .. }) => a.to_rrs(name),
+            (RecordType::A, JsonRRMap { a: Some(a), .. }) => a.to_rrs(name),
             (
                 RecordType::AAAA,
                 JsonRRMap {
-                    AAAA: Some(aaaa), ..
+                    aaaa: Some(aaaa), ..
                 },
             ) => aaaa.to_rrs(name),
-            (RecordType::MX, JsonRRMap { MX: Some(mx), .. }) => mx.to_rrs(name),
-            (RecordType::NS, JsonRRMap { NS: Some(ns), .. }) => ns.to_rrs(name),
-            (RecordType::SOA, JsonRRMap { SOA: Some(soa), .. }) => soa.to_rrs(name),
+            (RecordType::MX, JsonRRMap { mx: Some(mx), .. }) => mx.to_rrs(name),
+            (RecordType::NS, JsonRRMap { ns: Some(ns), .. }) => ns.to_rrs(name),
+            (RecordType::SOA, JsonRRMap { soa: Some(soa), .. }) => soa.to_rrs(name),
             _ => Vec::new(), // couldn't find rrs of the requested type
         }
     }

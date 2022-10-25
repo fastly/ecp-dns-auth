@@ -14,7 +14,10 @@ use trust_dns_proto::op::{Header, Message, MessageType, OpCode, Query, ResponseC
 use trust_dns_proto::rr::{Name, Record, RecordType};
 
 mod lookup;
-use crate::lookup::{lookup, LookupResult};
+use crate::lookup::lookup;
+
+mod dns;
+use crate::dns::{dns_error, dns_response};
 
 const MIME_APPLICATION_DNS: &str = "application/dns-message";
 
@@ -177,27 +180,6 @@ fn handle_json_request(req: Request) -> Result<String, Error> {
         _ => Err(anyhow!("JSON encoding error")),
     }
 }
-
-fn dns_error(request: Message, rcode: ResponseCode) -> Message {
-    Message::error_msg(request.id(), request.op_code(), rcode)
-}
-
-fn dns_response(req_header: &Header, query: &Query, result: LookupResult) -> Message {
-    let mut header = Header::response_from_request(req_header);
-    header.set_message_type(MessageType::Response);
-    header.set_authoritative(true);
-
-    let mut response = Message::new();
-    response.set_header(header);
-    response.set_response_code(result.rcode);
-    response.add_query(query.clone());
-    response.insert_answers(result.answers);
-    response.insert_name_servers(result.authority);
-    response.insert_additionals(result.additionals);
-    debug!("response: {:?}", response);
-    response
-}
-
 fn install_tracing_subscriber() {
     tracing_subscriber::fmt()
         .compact()

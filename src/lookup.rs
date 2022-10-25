@@ -1,12 +1,10 @@
-use std::net::{Ipv4Addr, Ipv6Addr};
-
 use fastly::config_store::ConfigStore;
-use serde::Deserialize;
 use tracing::{debug, error, instrument};
 
 use trust_dns_proto::op::ResponseCode;
-use trust_dns_proto::rr::rdata;
-use trust_dns_proto::rr::{Name, RData, Record, RecordType};
+use trust_dns_proto::rr::{Name, Record, RecordType};
+
+use crate::dns::JsonRRMap;
 
 pub struct LookupResult {
     pub rcode: ResponseCode,
@@ -45,7 +43,7 @@ pub fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
                 }
             };
             debug!("{}: {:?}", lname, rrmap);
-            result.answers = decode_json_rrs(name, rr_type, &rrmap);
+            result.answers = rrmap.get(name, rr_type);
         }
         _ => {
             // name and wildcard don't exist
@@ -53,7 +51,7 @@ pub fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
         }
     }
 
-    if result.answers.len() >= 1 {
+    if result.answers.len() > 0 {
         return result;
     }
 
@@ -81,15 +79,12 @@ pub fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
                     }
                 };
                 debug!("{}: {:?}", lname, rrmap);
-                match rrmap.SOA {
-                    Some(soa) => {
-                        result.authority = soa.to_rrs(&lname);
-                        return result;
-                    }
-                    _ => {
-                        // name exists, but no SOA record
-                        lname = lname.base_name();
-                    }
+                result.authority = rrmap.get(&lname, RecordType::SOA);
+                if result.authority.len() > 0 {
+                    return result;
+                } else {
+                    // name exists, but no soa record
+                    lname = lname.base_name();
                 }
             }
             _ => {
@@ -101,136 +96,4 @@ pub fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
 
     result.rcode = ResponseCode::Refused;
     result
-}
-
-#[derive(Deserialize, Debug)]
-struct JsonRRMap {
-    A: Option<JsonA>,
-    AAAA: Option<JsonAAAA>,
-    MX: Option<JsonMX>,
-    NS: Option<JsonNS>,
-    SOA: Option<JsonSOA>,
-}
-
-#[derive(Deserialize, Debug)]
-struct JsonA {
-    ttl: u32,
-    values: Vec<Ipv4Addr>,
-}
-
-impl JsonA {
-    fn to_rrs(&self, name: &Name) -> Vec<Record> {
-        self.values
-            .iter()
-            .map(|v| Record::from_rdata(name.clone(), self.ttl, RData::A(*v)))
-            .collect()
-    }
-}
-
-#[derive(Deserialize, Debug)]
-struct JsonAAAA {
-    ttl: u32,
-    values: Vec<Ipv6Addr>,
-}
-
-impl JsonAAAA {
-    fn to_rrs(&self, name: &Name) -> Vec<Record> {
-        self.values
-            .iter()
-            .map(|v| Record::from_rdata(name.clone(), self.ttl, RData::AAAA(*v)))
-            .collect()
-    }
-}
-
-#[derive(Deserialize, Debug)]
-struct JsonMXValue {
-    exchange: Name,
-    preference: u16,
-}
-
-#[derive(Deserialize, Debug)]
-struct JsonMX {
-    ttl: u32,
-    values: Vec<JsonMXValue>,
-}
-
-impl JsonMX {
-    fn to_rrs(&self, name: &Name) -> Vec<Record> {
-        self.values
-            .iter()
-            .map(|v| {
-                Record::from_rdata(
-                    name.clone(),
-                    self.ttl,
-                    RData::MX(rdata::MX::new(v.preference, v.exchange.clone())),
-                )
-            })
-            .collect()
-    }
-}
-
-#[derive(Deserialize, Debug)]
-struct JsonNS {
-    ttl: u32,
-    values: Vec<Name>,
-}
-
-impl JsonNS {
-    fn to_rrs(&self, name: &Name) -> Vec<Record> {
-        self.values
-            .iter()
-            .map(|v| Record::from_rdata(name.clone(), self.ttl, RData::NS(v.clone())))
-            .collect()
-    }
-}
-
-#[derive(Deserialize, Debug)]
-struct JsonSOAValue {
-    mname: Name,
-    rname: Name,
-    serial: u32,
-    refresh: i32,
-    retry: i32,
-    expire: i32,
-    minimum: u32,
-}
-
-#[derive(Deserialize, Debug)]
-struct JsonSOA {
-    ttl: u32,
-    value: JsonSOAValue,
-}
-
-impl JsonSOA {
-    fn to_rrs(&self, name: &Name) -> Vec<Record> {
-        vec![Record::from_rdata(
-            name.clone(),
-            self.ttl,
-            RData::SOA(rdata::SOA::new(
-                self.value.mname.clone(),
-                self.value.rname.clone(),
-                self.value.serial,
-                self.value.refresh,
-                self.value.retry,
-                self.value.expire,
-                self.value.minimum,
-            )),
-        )]
-    }
-}
-
-fn decode_json_rrs(name: &Name, rr_type: RecordType, rrmap: &JsonRRMap) -> Vec<Record> {
-    match (rr_type, rrmap) {
-        (RecordType::A, JsonRRMap { A: Some(a), .. }) => a.to_rrs(name),
-        (
-            RecordType::AAAA,
-            JsonRRMap {
-                AAAA: Some(aaaa), ..
-            },
-        ) => aaaa.to_rrs(name),
-        (RecordType::MX, JsonRRMap { MX: Some(mx), .. }) => mx.to_rrs(name),
-        (RecordType::NS, JsonRRMap { NS: Some(ns), .. }) => ns.to_rrs(name),
-        (RecordType::SOA, JsonRRMap { SOA: Some(soa), .. }) => soa.to_rrs(name),
-        _ => Vec::new(), // couldn't find rrs of the requested type
-    }
 }
