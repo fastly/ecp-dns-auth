@@ -1,6 +1,5 @@
 use std::str::FromStr;
 
-// use fastly::handle::client_ip_addr;
 use fastly::error::anyhow;
 use fastly::http::{header, Method, StatusCode};
 use fastly::{mime, Error, Request, Response};
@@ -201,8 +200,10 @@ fn dns_response(req_header: &Header, query: &Query, result: LookupResult) -> Mes
 
 fn install_tracing_subscriber() {
     tracing_subscriber::fmt()
-        // .with_max_level(Level::INFO)
-        .with_max_level(Level::DEBUG)
+        .compact()
+        .with_target(false)
+        .with_max_level(Level::INFO)
+        // .with_max_level(Level::DEBUG)
         .with_span_events(format::FmtSpan::CLOSE)
         .init();
 }
