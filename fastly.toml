@@ -64,3 +64,55 @@ service_id = "1qsHXbzrPme5M3iXsUjE3s"
 "AAAA": {"ttl": 3600, "values": ["2001:DB8::6"]}
 }
 """
+
+    [local_server.dictionaries.os_zones]
+      format = "inline-toml"
+    [local_server.dictionaries.os_zones.contents]
+      "os-example.com." = """\
+{
+  "SOA": {
+    "ttl": 3600,
+    "value": {
+        "mname": "ns1.os-example.com.",
+        "rname": "admin.os-example.com.",
+        "serial": 2010111201,
+        "refresh": 10800,
+        "retry": 3600,
+        "expire": 1209600,
+        "minimum": 3600
+      }
+  },
+  "NS": {"ttl": 3600, "values": ["ns1.os-example.com.", "ns2.os-example.com."]},
+  "MX": {"ttl": 3600, "values": [{"exchange": "mail.os-example.com.", "preference": 10}]}
+}
+"""
+      "ns1.os-example.com." = """\
+{"A": {"ttl": 3600, "values": ["192.0.2.1", "192.0.3.1"]},
+"AAAA": {"ttl": 3600, "values": ["2001:DB8::1"]}
+}
+"""
+      "ns2.os-example.com." = """\
+{"A": {"ttl": 3600, "values": ["192.0.2.2"]},
+"AAAA": {"ttl": 3600, "values": ["2001:DB8::2"]}
+}
+"""
+      "mail.os-example.com." = """\
+{"A": {"ttl": 3600, "values": ["192.0.2.3"]},
+"AAAA": {"ttl": 3600, "values": ["2001:DB8::3"]}
+}
+"""
+      "*.os-example.com." = """\
+{"A": {"ttl": 3600, "values": ["192.0.2.4"]},
+"AAAA": {"ttl": 3600, "values": ["2001:DB8::4"]}
+}
+"""
+      "test.sub.os-example.com." = """\
+{"A": {"ttl": 3600, "values": ["192.0.2.5"]},
+"AAAA": {"ttl": 3600, "values": ["2001:DB8::5"]}
+}
+"""
+      "*.sub.os-example.com." = """\
+{"A": {"ttl": 3600, "values": ["192.0.2.6"]},
+"AAAA": {"ttl": 3600, "values": ["2001:DB8::6"]}
+}
+"""
