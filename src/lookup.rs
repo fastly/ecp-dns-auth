@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use fastly::config_store::ConfigStore;
 use fastly::error::anyhow;
 use fastly::object_store::ObjectStore;
@@ -30,16 +32,19 @@ struct ZoneStore {
 
 impl ZoneStore {
     // TODO handle errors
-    fn open(name: &str) -> Self {
-        // For testing we store *.os-example.com in the Object store
+    #[instrument(skip_all)]
+    fn open(name: &Name) -> Self {
+        // For testing we store os-example.com in the Object store
         // and everything else in the Config store.
         // TODO decide on one and use it alone.
-        if name.ends_with(".os-example.com.") {
+        if Name::from_str("os-example.com.").unwrap().zone_of(name) {
+            debug!("using ObjectStore for: {}", name);
             let os = ObjectStore::open("os_zones").unwrap().unwrap();
             Self {
                 ds: DataStore::ObjectStore(os),
             }
         } else {
+            debug!("using ConfigStore for: {}", name);
             let cs = ConfigStore::open("cs_zones");
             Self {
                 ds: DataStore::ConfigStore(cs),
@@ -49,13 +54,15 @@ impl ZoneStore {
 
     #[instrument(skip(self))]
     fn get_rrmapstr(&self, name: &str) -> Result<Option<String>, Error> {
-        match &self.ds {
+        let rrmapstr = match &self.ds {
             DataStore::ObjectStore(os) => os.lookup_str(name).map_err(|err| anyhow!("{}", err)),
             DataStore::ConfigStore(cs) => cs.try_get(name).map_err(|err| anyhow!("{}", err)),
-        }
+        };
+        debug!("{}: {:?}", name, rrmapstr);
+        rrmapstr
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip_all)]
     fn decode_rrmap(&self, rrmapstr: &str) -> Result<JsonRRMap, serde_json::Error> {
         serde_json::from_str(rrmapstr)
     }
@@ -72,7 +79,10 @@ impl ZoneStore {
             },
 
             // didn't find anything for this name
-            Ok(None) => Ok(None),
+            Ok(None) => {
+                debug!("name: {} not found", name);
+                Ok(None)
+            }
 
             // something went wrong with the lookup
             Err(err) => {
@@ -92,14 +102,23 @@ pub fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
         additionals: Vec::new(),
     };
 
+    // not hosting any TLDs for now
+    if name.num_labels() < 2 {
+        result.rcode = ResponseCode::Refused;
+        return result;
+    }
+
     let mut lname = name.to_lowercase();
     lname.set_fqdn(true);
-    let store = ZoneStore::open(&lname.to_string());
+
+    let store = ZoneStore::open(&lname);
 
     // look for the name or the wildcard
     let mut rrmap = store.get_rrmap(&lname.to_string());
     match rrmap {
-        Ok(None) => rrmap = store.get_rrmap(&lname.clone().into_wildcard().to_string()),
+        Ok(None) if lname.num_labels() > 2 => {
+            rrmap = store.get_rrmap(&lname.clone().into_wildcard().to_string())
+        }
         _ => (),
     }
 
@@ -108,12 +127,12 @@ pub fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
             // name or wildcard exists; see if we
             // have answers for the requested rrtype
             debug!("{}: {:?}", lname, rrmap);
-            result.answers = rrmap.get(name, rr_type);
+            result.answers = rrmap.get_rrs(name, rr_type);
             if result.answers.len() > 0 {
                 return result;
             } else {
                 // no answers; see if we can find the SOA
-                result.authority = rrmap.get(name, RecordType::SOA);
+                result.authority = rrmap.get_rrs(name, RecordType::SOA);
                 if result.authority.len() > 0 {
                     return result;
                 }
@@ -143,7 +162,7 @@ pub fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
         match store.get_rrmap(&lname.to_string()) {
             Ok(Some(rrmap)) => {
                 debug!("{}: {:?}", lname, rrmap);
-                result.authority = rrmap.get(name, RecordType::SOA);
+                result.authority = rrmap.get_rrs(name, RecordType::SOA);
                 if result.authority.len() > 0 {
                     return result;
                 }

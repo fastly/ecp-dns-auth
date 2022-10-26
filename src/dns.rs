@@ -1,7 +1,7 @@
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 use serde::Deserialize;
-use tracing::debug;
+use tracing::{debug, instrument};
 
 use trust_dns_proto::op::{Header, Message, MessageType, Query, ResponseCode};
 use trust_dns_proto::rr::{rdata, Name, RData, Record, RecordType};
@@ -39,7 +39,8 @@ pub struct JsonRRMap {
 }
 
 impl JsonRRMap {
-    pub fn get(&self, name: &Name, rr_type: RecordType) -> Vec<Record> {
+    #[instrument(skip(self))]
+    pub fn get_rrs(&self, name: &Name, rr_type: RecordType) -> Vec<Record> {
         match (rr_type, self) {
             (RecordType::A, JsonRRMap { a: Some(a), .. }) => a.to_rrs(name),
             (
