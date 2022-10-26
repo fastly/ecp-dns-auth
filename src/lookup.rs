@@ -17,41 +17,53 @@ pub struct LookupResult {
     pub additionals: Vec<Record>,
 }
 
+// TODO there has to be a simpler way to
+// wrap either Config or Object store.
+enum DataStore {
+    ConfigStore(ConfigStore),
+    ObjectStore(ObjectStore),
+}
+
 struct ZoneStore {
-    cs: ConfigStore,
-    os: ObjectStore,
+    ds: DataStore,
 }
 
 impl ZoneStore {
-    fn open() -> Self {
-        Self {
-            // TODO handle errors
-            cs: ConfigStore::open("cs_zones"),
-            os: ObjectStore::open("os_zones").unwrap().unwrap(),
+    // TODO handle errors
+    fn open(name: &str) -> Self {
+        // For testing we store *.os-example.com in the Object store
+        // and everything else in the Config store.
+        // TODO decide on one and use it alone.
+        if name.ends_with(".os-example.com.") {
+            let os = ObjectStore::open("os_zones").unwrap().unwrap();
+            Self {
+                ds: DataStore::ObjectStore(os),
+            }
+        } else {
+            let cs = ConfigStore::open("cs_zones");
+            Self {
+                ds: DataStore::ConfigStore(cs),
+            }
         }
     }
 
     #[instrument(skip(self))]
-    fn get_rrmap_objectstore(&self, name: &str) -> Result<Option<String>, Error> {
-        self.os.lookup_str(name).map_err(|err| anyhow!("{}", err))
+    fn get_rrmapstr(&self, name: &str) -> Result<Option<String>, Error> {
+        match &self.ds {
+            DataStore::ObjectStore(os) => os.lookup_str(name).map_err(|err| anyhow!("{}", err)),
+            DataStore::ConfigStore(cs) => cs.try_get(name).map_err(|err| anyhow!("{}", err)),
+        }
     }
 
     #[instrument(skip(self))]
-    fn get_rrmap_configstore(&self, name: &str) -> Result<Option<String>, Error> {
-        self.cs.try_get(name).map_err(|err| anyhow!("{}", err))
+    fn decode_rrmap(&self, rrmapstr: &str) -> Result<JsonRRMap, serde_json::Error> {
+        serde_json::from_str(rrmapstr)
     }
 
-    // #[instrument(skip(self))]
     fn get_rrmap(&self, name: &str) -> Result<Option<JsonRRMap>, Error> {
-        let rrmapstr = if name.ends_with(".os-example.com.") {
-            self.get_rrmap_objectstore(name)
-        } else {
-            self.get_rrmap_configstore(name)
-        };
-
-        match rrmapstr {
+        match self.get_rrmapstr(name) {
             // found the json rrmap string - decode and return it
-            Ok(Some(rrmapstr)) => match serde_json::from_str(&rrmapstr) {
+            Ok(Some(rrmapstr)) => match self.decode_rrmap(&rrmapstr) {
                 Ok(rrmap) => Ok(Some(rrmap)),
                 Err(err) => {
                     error!("bad json in {}: {}", name, err);
@@ -80,10 +92,9 @@ pub fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
         additionals: Vec::new(),
     };
 
-    let store = ZoneStore::open();
-
     let mut lname = name.to_lowercase();
     lname.set_fqdn(true);
+    let store = ZoneStore::open(&lname.to_string());
 
     // look for the name or the wildcard
     let mut rrmap = store.get_rrmap(&lname.to_string());
