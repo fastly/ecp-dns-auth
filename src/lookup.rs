@@ -1,4 +1,8 @@
 use fastly::config_store::ConfigStore;
+use fastly::error::anyhow;
+use fastly::object_store::ObjectStore;
+use fastly::Error;
+
 use tracing::{debug, error, instrument};
 
 use trust_dns_proto::op::ResponseCode;
@@ -13,6 +17,60 @@ pub struct LookupResult {
     pub additionals: Vec<Record>,
 }
 
+struct ZoneStore {
+    cs: ConfigStore,
+    os: ObjectStore,
+}
+
+impl ZoneStore {
+    fn open() -> Self {
+        Self {
+            // TODO handle errors
+            cs: ConfigStore::open("cs_zones"),
+            os: ObjectStore::open("os_zones").unwrap().unwrap(),
+        }
+    }
+
+    #[instrument(skip(self))]
+    fn get_rrmap_objectstore(&self, name: &str) -> Result<Option<String>, Error> {
+        self.os.lookup_str(name).map_err(|err| anyhow!("{}", err))
+    }
+
+    #[instrument(skip(self))]
+    fn get_rrmap_configstore(&self, name: &str) -> Result<Option<String>, Error> {
+        self.cs.try_get(name).map_err(|err| anyhow!("{}", err))
+    }
+
+    // #[instrument(skip(self))]
+    fn get_rrmap(&self, name: &str) -> Result<Option<JsonRRMap>, Error> {
+        let rrmapstr = if name.ends_with(".os-example.com.") {
+            self.get_rrmap_objectstore(name)
+        } else {
+            self.get_rrmap_configstore(name)
+        };
+
+        match rrmapstr {
+            // found the json rrmap string - decode and return it
+            Ok(Some(rrmapstr)) => match serde_json::from_str(&rrmapstr) {
+                Ok(rrmap) => Ok(Some(rrmap)),
+                Err(err) => {
+                    error!("bad json in {}: {}", name, err);
+                    Err(anyhow!("{}", err))
+                }
+            },
+
+            // didn't find anything for this name
+            Ok(None) => Ok(None),
+
+            // something went wrong with the lookup
+            Err(err) => {
+                error!("lookup failed for {}: {}", name, err);
+                Err(anyhow!("{}", err))
+            }
+        }
+    }
+}
+
 #[instrument]
 pub fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
     let mut result = LookupResult {
@@ -22,74 +80,75 @@ pub fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
         additionals: Vec::new(),
     };
 
-    // let store = ConfigStore::open("zones"); // edge dictionary
-    let store = ConfigStore::open("cs_zones");
+    let store = ZoneStore::open();
 
-    // look for the name or the wildcard
     let mut lname = name.to_lowercase();
     lname.set_fqdn(true);
-    match store
-        .get(&lname.to_string())
-        .or_else(|| store.get(&lname.clone().into_wildcard().to_string()))
-    {
-        Some(rrmapstr) => {
-            // found something; decode the rr map
-            let rrmap: JsonRRMap = match serde_json::from_str(&rrmapstr) {
-                Ok(rrmap) => rrmap,
-                Err(err) => {
-                    error!("bad json data in {} or wildcard: {}", name, err);
-                    result.rcode = ResponseCode::ServFail;
-                    return result;
-                }
-            };
+
+    // look for the name or the wildcard
+    let mut rrmap = store.get_rrmap(&lname.to_string());
+    match rrmap {
+        Ok(None) => rrmap = store.get_rrmap(&lname.clone().into_wildcard().to_string()),
+        _ => (),
+    }
+
+    match rrmap {
+        Ok(Some(rrmap)) => {
+            // name or wildcard exists; see if we
+            // have answers for the requested rrtype
             debug!("{}: {:?}", lname, rrmap);
             result.answers = rrmap.get(name, rr_type);
+            if result.answers.len() > 0 {
+                return result;
+            } else {
+                // no answers; see if we can find the SOA
+                result.authority = rrmap.get(name, RecordType::SOA);
+                if result.authority.len() > 0 {
+                    return result;
+                }
+            }
         }
-        _ => {
+
+        Ok(None) => {
             // name and wildcard don't exist
             result.rcode = ResponseCode::NXDomain;
         }
-    }
 
-    if result.answers.len() > 0 {
-        return result;
+        _ => {
+            // error during lookup or json decode
+            result.rcode = ResponseCode::ServFail;
+            return result;
+        }
     }
 
     // If we got here we failed to find answers because the name
     // and wildcard don't exist or don't have records of rr_type.
-    // Check the current rrs and then walk up the tree looking for
-    // the SOA record at the top of the zone.
+    // Walk up the tree looking for the SOA at the top of the zone.
     // If we find it, add it to the authority section and return.
     // Otherwise return REFUSED because we don't serve this domain.
 
-    // TODO we already have the rrmap for the current name above;
-    // check it before walking up the tree and start with:
-    // lname = lname.base_name();
-
+    lname = lname.base_name();
     while lname.num_labels() >= 2 {
-        match store.get(&lname.to_string()) {
-            Some(rrmapstr) => {
-                // found a name; decode the rr map
-                let rrmap: JsonRRMap = match serde_json::from_str(&rrmapstr) {
-                    Ok(rrmap) => rrmap,
-                    Err(err) => {
-                        error!("bad json data in {}: {}", name, err);
-                        result.rcode = ResponseCode::ServFail;
-                        return result;
-                    }
-                };
+        match store.get_rrmap(&lname.to_string()) {
+            Ok(Some(rrmap)) => {
                 debug!("{}: {:?}", lname, rrmap);
-                result.authority = rrmap.get(&lname, RecordType::SOA);
+                result.authority = rrmap.get(name, RecordType::SOA);
                 if result.authority.len() > 0 {
                     return result;
-                } else {
-                    // name exists, but no soa record
-                    lname = lname.base_name();
                 }
+                // name exists, but no SOA record
+                lname = lname.base_name();
             }
-            _ => {
+
+            Ok(None) => {
                 // name doesn't exist
                 lname = lname.base_name();
+            }
+
+            _ => {
+                // error during lookup or json decode
+                result.rcode = ResponseCode::ServFail;
+                return result;
             }
         }
     }
