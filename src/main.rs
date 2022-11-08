@@ -39,12 +39,10 @@ fn handle_doh_get(req: Request) -> Result<Response, Error> {
         .get_query_parameter("dns")
         .and_then(|dns| base64::decode_config(dns, base64::URL_SAFE_NO_PAD).ok())
     {
-        Some(query) => return handle_doh_request(query),
-        _ => {
-            return Ok(Response::from_status(StatusCode::BAD_REQUEST)
-                .with_body_text_plain("Missing or invalid 'dns' parameter\n"))
-        }
-    };
+        Some(query) => handle_doh_request(query),
+        _ => Ok(Response::from_status(StatusCode::BAD_REQUEST)
+            .with_body_text_plain("Missing or invalid 'dns' parameter\n")),
+    }
 }
 
 #[instrument(skip_all)]
@@ -139,14 +137,14 @@ fn handle_json_request(req: Request) -> Result<String, Error> {
     let name = req
         .get_query_parameter("name")
         .and_then(|name| Name::from_str_relaxed(name).ok())
-        .ok_or(anyhow!("Missing or invalid 'name' parameter"))?;
+        .ok_or_else(|| anyhow!("Missing or invalid 'name' parameter"))?;
 
     let rr_type = req
         .get_query_parameter("type")
         .or_else(|| req.get_query_parameter("rr_type"))
         .or(Some("A"))
         .and_then(|rr_type| RecordType::from_str(&rr_type.to_uppercase()).ok())
-        .ok_or(anyhow!("Invalid 'type' parameter"))?;
+        .ok_or_else(|| anyhow!("Invalid 'type' parameter"))?;
 
     let result = lookup(&name, rr_type);
     let response = dns_response(&Header::new(), &Query::query(name, rr_type), result);

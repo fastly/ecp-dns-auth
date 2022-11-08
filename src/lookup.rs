@@ -128,12 +128,12 @@ pub fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
             // have answers for the requested rrtype
             debug!("{}: {:?}", lname, rrmap);
             result.answers = rrmap.get_rrs(name, rr_type);
-            if result.answers.len() > 0 {
+            if !result.answers.is_empty() {
                 return result;
             } else {
                 // no answers; see if we can find the SOA
                 result.authority = rrmap.get_rrs(name, RecordType::SOA);
-                if result.authority.len() > 0 {
+                if !result.authority.is_empty() {
                     return result;
                 }
             }
@@ -163,7 +163,7 @@ pub fn lookup(name: &Name, rr_type: RecordType) -> LookupResult {
             Ok(Some(rrmap)) => {
                 debug!("{}: {:?}", lname, rrmap);
                 result.authority = rrmap.get_rrs(name, RecordType::SOA);
-                if result.authority.len() > 0 {
+                if !result.authority.is_empty() {
                     return result;
                 }
                 // name exists, but no SOA record
